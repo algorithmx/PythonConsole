@@ -34,19 +34,31 @@ interface HistoryItem {
 function PythonConsole({
     onMessage
 } : PythonConsoleProps) : JSX.Element {
+
     const [history, setHistory] = useState<HistoryItem[]>(() => {
         const savedHistory = Cookies.get('pythonConsoleHistory');
         if (savedHistory) {
-            console.log(savedHistory);
-            return JSON.parse(savedHistory).filter((h: any) => h.input !== "Python version");
+            console.log("savedHistory", savedHistory);
+            const filteredHistory = JSON.parse(savedHistory).filter((h: any) => h.input !== "Python version");
+            return filteredHistory;
         } else {
             return [];
         }
     });
+    useEffect(() => {
+        const savedHistory = Cookies.get('pythonConsoleHistory');
+        console.log("savedHistory", savedHistory);
+        if (savedHistory) {
+            const filteredHistory = JSON.parse(savedHistory).filter((h: any) => h.input !== "Python version");
+            setHistory(filteredHistory);
+        }
+    }, []);
+    console.log("history", history);
     const N0Ref = useRef<number>(history.length); 
     const N0 = N0Ref.current; 
-    const [historyIndex, setHistoryIndex] = useState<number>(N0-1);
+    const [historyIndex, setHistoryIndex] = useState<number>(-1);
     const [currentInput, setCurrentInput] = useState('');
+    const [inputBuffer, setInputBuffer] = useState('');
     const [isPyodideReady, setIsPyodideReady] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -56,7 +68,10 @@ function PythonConsole({
     };
 
     useEffect(() => {
-        Cookies.set('pythonConsoleHistory', JSON.stringify(history));
+        Cookies.set(
+            'pythonConsoleHistory', JSON.stringify(history), 
+            { expires: 30, sameSite: 'strict', secure: true }
+        );
         scrollToBottom();
     }, [history]);
 
@@ -100,17 +115,20 @@ function PythonConsole({
             document.head.removeChild(script);
         };
     }, []);
-    
 
     const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+        // setInputBuffer(event.target.value);
         setCurrentInput(event.target.value);
+    };
+    const handleBlur = () => {
+        setCurrentInput(inputBuffer);
     };
 
     const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
         if (event.key === 'Enter') {
             event.preventDefault();
             executeCode(currentInput);
-            setHistoryIndex(N0-1);
+            setHistoryIndex(-1);
         } else if (event.key === 'ArrowUp') {
             event.preventDefault();
             if (historyIndex < history.length - 1) {
@@ -118,16 +136,18 @@ function PythonConsole({
                 setHistoryIndex(newIndex);
                 setCurrentInput(history[history.length - 1 - newIndex].input);
             }
+            console.log("historyIndex now after ArrowUp: ", historyIndex);
         } else if (event.key === 'ArrowDown') {
             event.preventDefault();
-            if (historyIndex > N0) {
+            if (historyIndex > 0) {
                 const newIndex = historyIndex - 1;
                 setHistoryIndex(newIndex);
                 setCurrentInput(history[history.length - 1 - newIndex].input);
-            } else if (historyIndex === N0) {
-                setHistoryIndex(N0-1);
+            } else if (historyIndex === 0) {
+                setHistoryIndex(-1);
                 setCurrentInput('');
             }
+            console.log("historyIndex now after ArrowDown: ", historyIndex);
         }
     };
 
@@ -191,6 +211,7 @@ function PythonConsole({
                     ref={inputRef}
                     value={currentInput}
                     onChange={handleInputChange}
+                    //onBlur={handleBlur}
                     onKeyDown={handleKeyDown}
                     spellCheck={false}
                 />
