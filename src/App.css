@@ -61,16 +61,31 @@ main {
 }
 
 .python-console-input {
-  width: 90%;
+  width: 99%;
   border: none;
   padding: none;
   margin: none;
   margin-bottom: none;
-  display: 'flex';
-  align-items: 'left';
+  display: flex;
+  align-items: left;
+  white-space: normal;
+  word-wrap: break-word;
 }
 
 .python-console-input input {
+  width: 99%;
   outline: none;
   border: none;
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+.python-console-input div {
+  width: 100%;
+  outline: none;
+  border: none;
+  white-space: pre-wrap; /* Add this line */
+  word-wrap: break-word; /* Add this line */
+  overflow-y: auto; /* Add this line */
+  max-height: 100px; /* Adjust as needed */
 }
