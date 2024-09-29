@@ -19,6 +19,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { JSX } from 'react/jsx-runtime';
+import Cookies from 'js-cookie';
 
 
 interface PythonConsoleProps {
@@ -33,9 +34,18 @@ interface HistoryItem {
 function PythonConsole({
     onMessage
 } : PythonConsoleProps) : JSX.Element {
-    const [history, setHistory] = useState<HistoryItem[]>([]);
-
-    const [historyIndex, setHistoryIndex] = useState<number>(-1);
+    const [history, setHistory] = useState<HistoryItem[]>(() => {
+        const savedHistory = Cookies.get('pythonConsoleHistory');
+        if (savedHistory) {
+            console.log(savedHistory);
+            return JSON.parse(savedHistory).filter((h: any) => h.input !== "Python version");
+        } else {
+            return [];
+        }
+    });
+    const N0Ref = useRef<number>(history.length); 
+    const N0 = N0Ref.current; 
+    const [historyIndex, setHistoryIndex] = useState<number>(N0-1);
     const [currentInput, setCurrentInput] = useState('');
     const [isPyodideReady, setIsPyodideReady] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -46,6 +56,7 @@ function PythonConsole({
     };
 
     useEffect(() => {
+        Cookies.set('pythonConsoleHistory', JSON.stringify(history));
         scrollToBottom();
     }, [history]);
 
@@ -69,12 +80,14 @@ function PythonConsole({
                 (window as any).pyodide = pyodide;
                 if (pyodide) {
                     onMessage("Pyodide loaded successfully");
-                    setIsPyodideReady(true);
                 }
                 await loadPyodidePackages();
                 const result = await pyodide.runPythonAsync("import sys; sys.version");
                 if (result !== undefined) {
                     setHistory(prev => [...prev, { input: "Python version", output: result.toString() }]);
+                }
+                if (pyodide) {
+                    setIsPyodideReady(true);
                 }
             } catch (error) {
                 onMessage(`Error loading Pyodide or packages: ${error}`);
@@ -97,7 +110,7 @@ function PythonConsole({
         if (event.key === 'Enter') {
             event.preventDefault();
             executeCode(currentInput);
-            setHistoryIndex(-1);
+            setHistoryIndex(N0-1);
         } else if (event.key === 'ArrowUp') {
             event.preventDefault();
             if (historyIndex < history.length - 1) {
@@ -107,12 +120,12 @@ function PythonConsole({
             }
         } else if (event.key === 'ArrowDown') {
             event.preventDefault();
-            if (historyIndex > 0) {
+            if (historyIndex > N0) {
                 const newIndex = historyIndex - 1;
                 setHistoryIndex(newIndex);
                 setCurrentInput(history[history.length - 1 - newIndex].input);
-            } else if (historyIndex === 0) {
-                setHistoryIndex(-1);
+            } else if (historyIndex === N0) {
+                setHistoryIndex(N0-1);
                 setCurrentInput('');
             }
         }
@@ -122,16 +135,13 @@ function PythonConsole({
         if (code.trim() === '') {
             return; // Handle empty inputs
         }
-    
         const newHistoryItem: HistoryItem = { input: code, output: null };
         setHistory(prev => [...prev, newHistoryItem]);
         setCurrentInput('');
-    
         if (!isPyodideReady) {
             onMessage("Pyodide is still loading. Please wait...");
             return;
         }
-    
         try {
             const { pyodide } = window as any;
             const result = await pyodide.runPythonAsync(code);
@@ -143,7 +153,7 @@ function PythonConsole({
         } catch (error) {
             setHistory(prev => {
                 const updated = [...prev];
-                updated[updated.length - 1].output = `Error: ${error}`;
+                updated[updated.length - 1].output = `${error}`;
                 return updated;
             });
         }
@@ -156,8 +166,8 @@ function PythonConsole({
 
     return (
         <div className="python-console">
-            <div className="python-console-history">
-                {history.map((item, index) => {
+            {isPyodideReady && (<div className="python-console-history">
+                {history.slice(N0).map((item, index: number) => {
                     if (index === 0) {
                         return (
                             <React.Fragment key={index}>
@@ -174,7 +184,7 @@ function PythonConsole({
                     }
                 })}
                 <div ref={scrollRef} />
-            </div>
+            </div>)}
             <div className="python-console-input">
                 <span>{'>>> '}</span>
                 <input
@@ -182,6 +192,7 @@ function PythonConsole({
                     value={currentInput}
                     onChange={handleInputChange}
                     onKeyDown={handleKeyDown}
+                    spellCheck={false}
                 />
             </div>
         </div>

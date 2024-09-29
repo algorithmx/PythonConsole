@@ -6,6 +6,7 @@
   "license": "ISC",
   "dependencies": {
     "@pyscript/core": "^0.5.12",
+    "js-cookie": "^3.0.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-scripts": "^5.0.1",
@@ -30,6 +31,7 @@
     ]
   },
   "devDependencies": {
+    "@types/js-cookie": "^3.0.6",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "clean-webpack-plugin": "^4.0.0",
