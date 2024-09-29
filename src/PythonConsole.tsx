@@ -38,16 +38,13 @@ function PythonConsole({
     const [history, setHistory] = useState<HistoryItem[]>(() => {
         const savedHistory = Cookies.get('pythonConsoleHistory');
         if (savedHistory) {
-            console.log("savedHistory", savedHistory);
-            const filteredHistory = JSON.parse(savedHistory).filter((h: any) => h.input !== "Python version");
-            return filteredHistory;
+            return JSON.parse(savedHistory).filter((h: any) => h.input !== "Python version");
         } else {
             return [];
         }
     });
     useEffect(() => {
         const savedHistory = Cookies.get('pythonConsoleHistory');
-        console.log("savedHistory", savedHistory);
         if (savedHistory) {
             const filteredHistory = JSON.parse(savedHistory).filter((h: any) => h.input !== "Python version");
             setHistory(filteredHistory);
@@ -63,6 +60,8 @@ function PythonConsole({
     const [isPyodideReady, setIsPyodideReady] = useState(false);
     // const inputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const [suggestions, setSuggestions] = useState<string[]>([]);
+    const [showSuggestions, setShowSuggestions] = useState(false);
 
     const scrollToBottom = () => {
         scrollRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -131,39 +130,91 @@ function PythonConsole({
         setCurrentInput(inputBuffer);
     };
 
+    const isContinueLastLine = (text: string): boolean => {
+        const multilines = text.split('\n');
+        return multilines[multilines.length-1].endsWith(':') || multilines[multilines.length-1].endsWith('\\');
+    }
+
+    const isMultiLine = (text: string): boolean => {
+        const multilines = text.split('\n');
+        console.log(multilines);
+        return multilines.length > 1 && multilines[multilines.length-1] !== '';
+    }
+
+    const getSuggestions = async (objectName: string): Promise<string[]> => {
+        if (!isPyodideReady) {
+            onMessage("Pyodide is still loading. Please wait...");
+            return [];
+        }
+        try {
+            const { pyodide } = window as any;
+            const code = `import json; json.dumps(dir(${objectName}))`;
+            const result = await pyodide.runPythonAsync(code);
+            console.log(result);
+            return JSON.parse(result);
+        } catch (error) {
+            onMessage(`Error fetching suggestions: ${error}`);
+            return [];
+        }
+    };
+
+    const getObj = (text: string): {obj:string, x:string} => {
+        const inputLines = text.split('\n');
+        const lastLine = inputLines[inputLines.length - 1];
+        const dotIndex = lastLine.lastIndexOf('.');
+        return {
+            obj: lastLine.substring(0, dotIndex), 
+            x: lastLine.length-1===dotIndex ? '' : lastLine.substring(dotIndex+1)
+        };
+    }
+
     const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (event.shiftKey && event.key === 'Enter') {
             event.preventDefault();
             setCurrentInput(prev => prev + '\n');
-        } else {
-            if (event.key === 'Tab') {
-                event.preventDefault();
-                setCurrentInput(prev => prependTabToLastLine(prev));
-            } else if (event.key === 'Enter') {
-                event.preventDefault();
-                console.log("currentInput now before Enter: ", currentInput);
+        } else if (event.key === 'Tab') {
+            // event.preventDefault();
+            // setCurrentInput(prev => prependTabToLastLine(prev));
+            event.preventDefault();
+            const { obj, x } = getObj(currentInput);
+            getSuggestions(obj)
+                .then(suggestions => {
+                    setSuggestions(suggestions);
+                    setShowSuggestions(true);
+                    if (x !== '') {
+                        // find keys in suggestions that starts with x
+                        const matchingSuggestion = suggestions.find(suggestion => suggestion.startsWith(x));
+                        if (matchingSuggestion) {
+                            // then set the input box to obj.key
+                            setCurrentInput(`${obj}.${matchingSuggestion}`);
+                        }
+                    }
+                });
+        } else if (event.key === 'Enter') {
+            event.preventDefault();
+            if (isContinueLastLine(currentInput) || isMultiLine(currentInput)) {
+                setCurrentInput(prev => prev + '\n');
+            } else {
                 executeCode(currentInput);
                 setHistoryIndex(-1);
-            } else if (event.key === 'ArrowUp') {
-                event.preventDefault();
-                if (historyIndex < history.length - 1) {
-                    const newIndex = historyIndex + 1;
-                    setHistoryIndex(newIndex);
-                    setCurrentInput(history[history.length - 1 - newIndex].input);
-                }
-                console.log("historyIndex now after ArrowUp: ", historyIndex);
-            } else if (event.key === 'ArrowDown') {
-                event.preventDefault();
-                if (historyIndex > 0) {
-                    const newIndex = historyIndex - 1;
-                    setHistoryIndex(newIndex);
-                    setCurrentInput(history[history.length - 1 - newIndex].input);
-                } else if (historyIndex === 0) {
-                    setHistoryIndex(-1);
-                    setCurrentInput('');
-                } 
-                console.log("historyIndex now after ArrowDown: ", historyIndex);
             }
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            if (historyIndex < history.length - 1) {
+                const newIndex = historyIndex + 1;
+                setHistoryIndex(newIndex);
+                setCurrentInput(history[history.length - 1 - newIndex].input);
+            }
+        } else if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            if (historyIndex > 0) {
+                const newIndex = historyIndex - 1;
+                setHistoryIndex(newIndex);
+                setCurrentInput(history[history.length - 1 - newIndex].input);
+            } else if (historyIndex === 0) {
+                setHistoryIndex(-1);
+                setCurrentInput('');
+            } 
         }
     };
 
@@ -229,8 +280,9 @@ function PythonConsole({
                 <div ref={scrollRef} />
             </div>)}
             <div className="python-console-input">
-                <span>{'>>> '}</span>
+                <span style={{ padding: '0', margin: '0' }}>{'>>>'}&nbsp;</span>
                 <textarea
+                    style={{ padding: '0', margin: '0' }}
                     // ref={inputRef}
                     value={currentInput}
                     onChange={handleInputChange}
