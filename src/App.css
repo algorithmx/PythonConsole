@@ -72,20 +72,12 @@ main {
   word-wrap: break-word;
 }
 
-.python-console-input input {
+.python-console-input textarea {
+  color: #00ff1a;
+  background-color: #000;
   width: 99%;
   outline: none;
   border: none;
   white-space: normal;
   word-wrap: break-word;
-}
-
-.python-console-input div {
-  width: 100%;
-  outline: none;
-  border: none;
-  white-space: pre-wrap; /* Add this line */
-  word-wrap: break-word; /* Add this line */
-  overflow-y: auto; /* Add this line */
-  max-height: 100px; /* Adjust as needed */
 }

@@ -53,14 +53,15 @@ function PythonConsole({
             setHistory(filteredHistory);
         }
     }, []);
-    console.log("history", history);
+
     const N0Ref = useRef<number>(history.length); 
     const N0 = N0Ref.current; 
     const [historyIndex, setHistoryIndex] = useState<number>(-1);
     const [currentInput, setCurrentInput] = useState('');
     const [inputBuffer, setInputBuffer] = useState('');
+    const [rows, setRows] = useState(1);
     const [isPyodideReady, setIsPyodideReady] = useState(false);
-    const inputRef = useRef<HTMLInputElement>(null);
+    // const inputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = () => {
@@ -116,7 +117,13 @@ function PythonConsole({
         };
     }, []);
 
-    const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    useEffect(() => {
+        // Calculate the number of lines
+        const numberOfLines = currentInput.split("\n").length;
+        setRows(numberOfLines > 1 ? numberOfLines : 1);
+    }, [currentInput]);
+
+    const handleInputChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
         // setInputBuffer(event.target.value);
         setCurrentInput(event.target.value);
     };
@@ -124,30 +131,39 @@ function PythonConsole({
         setCurrentInput(inputBuffer);
     };
 
-    const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-        if (event.key === 'Enter') {
+    const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+        if (event.shiftKey && event.key === 'Enter') {
             event.preventDefault();
-            executeCode(currentInput);
-            setHistoryIndex(-1);
-        } else if (event.key === 'ArrowUp') {
-            event.preventDefault();
-            if (historyIndex < history.length - 1) {
-                const newIndex = historyIndex + 1;
-                setHistoryIndex(newIndex);
-                setCurrentInput(history[history.length - 1 - newIndex].input);
-            }
-            console.log("historyIndex now after ArrowUp: ", historyIndex);
-        } else if (event.key === 'ArrowDown') {
-            event.preventDefault();
-            if (historyIndex > 0) {
-                const newIndex = historyIndex - 1;
-                setHistoryIndex(newIndex);
-                setCurrentInput(history[history.length - 1 - newIndex].input);
-            } else if (historyIndex === 0) {
+            setCurrentInput(prev => prev + '\n');
+        } else {
+            if (event.key === 'Tab') {
+                event.preventDefault();
+                setCurrentInput(prev => prependTabToLastLine(prev));
+            } else if (event.key === 'Enter') {
+                event.preventDefault();
+                console.log("currentInput now before Enter: ", currentInput);
+                executeCode(currentInput);
                 setHistoryIndex(-1);
-                setCurrentInput('');
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (historyIndex < history.length - 1) {
+                    const newIndex = historyIndex + 1;
+                    setHistoryIndex(newIndex);
+                    setCurrentInput(history[history.length - 1 - newIndex].input);
+                }
+                console.log("historyIndex now after ArrowUp: ", historyIndex);
+            } else if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                if (historyIndex > 0) {
+                    const newIndex = historyIndex - 1;
+                    setHistoryIndex(newIndex);
+                    setCurrentInput(history[history.length - 1 - newIndex].input);
+                } else if (historyIndex === 0) {
+                    setHistoryIndex(-1);
+                    setCurrentInput('');
+                } 
+                console.log("historyIndex now after ArrowDown: ", historyIndex);
             }
-            console.log("historyIndex now after ArrowDown: ", historyIndex);
         }
     };
 
@@ -178,11 +194,18 @@ function PythonConsole({
             });
         }
     
-        if (inputRef.current) {
-            inputRef.current.focus();
-        }
+        // if (inputRef.current) {
+        //     inputRef.current.focus();
+        // }
     };
-    
+
+    const toMultiline = (text: string) : string => {
+        return text.split('\n').map((line, index) => (index===0 ? `${line}` : `... ${line}`)).join('\n');
+    }
+    const prependTabToLastLine = (text: string) : string => {
+        const multilines = text.split('\n');
+        return multilines.map((line, index) => (index=== multilines.length-1 ? `  ${line}` : line)).join('\n');
+    }
 
     return (
         <div className="python-console">
@@ -196,7 +219,7 @@ function PythonConsole({
                     } else if (item.input !== 'Python version') {
                         return (
                             <React.Fragment key={index}>
-                                <div>{`>>> ${item.input}`}</div>
+                                <div>{`>>> ${toMultiline(item.input)}`}</div>
                                 {item.output !== null && <div>{item.output}</div>}
                             </React.Fragment>)
                     } else {
@@ -207,13 +230,14 @@ function PythonConsole({
             </div>)}
             <div className="python-console-input">
                 <span>{'>>> '}</span>
-                <input
-                    ref={inputRef}
+                <textarea
+                    // ref={inputRef}
                     value={currentInput}
                     onChange={handleInputChange}
                     //onBlur={handleBlur}
                     onKeyDown={handleKeyDown}
                     spellCheck={false}
+                    rows={rows}
                 />
             </div>
         </div>
