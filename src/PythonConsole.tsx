@@ -31,6 +31,20 @@ interface HistoryItem {
     output: string | null;
 }
 
+function changeElementText(id: string, text: string) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.innerText = text;
+    }
+}
+
+function changeElementColor(id: string, color: any) {
+    const element = document.getElementById(id);
+    if (element) {
+        element.style.color = color;
+    }
+}
+
 function PythonConsole({
     onMessage
 } : PythonConsoleProps) : JSX.Element {
@@ -81,7 +95,10 @@ function PythonConsole({
         await pyodide.loadPackage("micropip");
         await pyodide.runPythonAsync(`
             import micropip
-            await micropip.install(['numpy', 'scipy', 'scikit-learn', 'pydantic', 'pandas', 'matplotlib', 'plotly', 'seaborn']);
+            await micropip.install(['numpy', 'scipy', 'pydantic', 'pandas', 'matplotlib', 'plotly']);
+        `);
+        await pyodide.runPythonAsync(`
+            import js
         `);
         onMessage("Packages loaded successfully");
     };
@@ -115,9 +132,15 @@ function PythonConsole({
                 const result = await pyodide.runPythonAsync("import sys; sys.version");
                 if (result !== undefined) {
                     const outs = result.toString();
-                    const todoList = "\n\nTODO:\n\tinclude openai\n\tsupport ipython\n\trender iframes in-place";
+                    const todoList = "\n\nTODO:\n\tinclude openai / llamaindex / langchain\n\tsupport ipython\n\trender iframes in-place";
                     setHistory(prev => [...prev, { input: "Python version", output: outs + todoList }]);
                 }
+                //! here is an entrance to element manipulation within terminal
+                //! the host webpage can be manipulated by python code
+                // pyodide.registerJsModule('mymodule', {
+                //     changeElementText,
+                //     changeElementColor
+                // });
                 if (pyodide) {
                     setIsPyodideReady(true);
                 }
@@ -127,7 +150,6 @@ function PythonConsole({
             }
         };
         document.head.appendChild(script);
-    
         return () => {
             document.head.removeChild(script);
         };
