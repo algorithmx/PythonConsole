@@ -17,6 +17,23 @@ main {
   height: 85%;
 }
 
+#root {
+  margin: 0;
+  padding: 0;
+}
+
+#injected-plotly-html {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  border: none;
+}
+
+#figure-area {
+  margin: 0;
+  padding: 0;
+}
+
 .app {
   display: flex;
   flex-direction: column;

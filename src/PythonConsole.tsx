@@ -56,8 +56,9 @@ function PythonConsole({
     const [historyIndex, setHistoryIndex] = useState<number>(-1);
     const [currentInput, setCurrentInput] = useState('');
     const [inputBuffer, setInputBuffer] = useState('');
+    const [htmlInjection, setHtmlInjection] = useState<string|null>(null);
     const [rows, setRows] = useState(1);
-    const [isPyodideReady, setIsPyodideReady] = useState(false);
+    const [isPyodideReady, setIsPyodideReady] = useState<boolean>(false);
     // const inputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -80,10 +81,24 @@ function PythonConsole({
         await pyodide.loadPackage("micropip");
         await pyodide.runPythonAsync(`
             import micropip
-            await micropip.install(['numpy', 'pandas', 'matplotlib']);
+            await micropip.install(['numpy', 'pandas', 'matplotlib', 'plotly']);
         `);
         onMessage("Packages loaded successfully");
     };
+
+    useEffect(() => {
+        if (htmlInjection) {
+            const iframe = document.getElementById('injected-plotly-html') as HTMLIFrameElement;
+            // if (iframe && iframe.contentDocument) {
+            //     iframe.contentDocument.open();
+            //     iframe.contentDocument.write(htmlInjection);
+            //     iframe.contentDocument.close();
+            // }
+            if (iframe) {
+                iframe.srcdoc = htmlInjection;
+            }
+        }
+    }, [htmlInjection]);
 
     useEffect(() => {
         const script = document.createElement('script');
@@ -150,6 +165,7 @@ function PythonConsole({
             const { pyodide } = window as any;
             const code = `import json; json.dumps(dir(${objectName}))`;
             const result = await pyodide.runPythonAsync(code);
+            console.log("Suggestions:");
             console.log(result);
             return JSON.parse(result);
         } catch (error) {
@@ -218,6 +234,14 @@ function PythonConsole({
         }
     };
 
+    const isHtml = (s: string|null): boolean => {
+        return s!==null && s.startsWith('<html>') && s.endsWith('</html>')
+    }
+
+    const isPythonError = (s: string|null): boolean => {
+        return s!==null && s.startsWith('PythonError:')
+    }
+
     const executeCode = async (code: string) => {
         if (code.trim() === '') {
             return; // Handle empty inputs
@@ -232,9 +256,22 @@ function PythonConsole({
         try {
             const { pyodide } = window as any;
             const result = await pyodide.runPythonAsync(code);
+            let resultString: string|null = null;
+            let b = false;
+            if (result !== undefined) {
+                resultString = result.toString();
+                console.log("Python command result:");
+                console.log(result);
+                console.log("Python command result string:");
+                console.log(resultString);
+                b = isHtml(resultString);
+                if ( b ) {
+                    setHtmlInjection(resultString);
+                }
+            }
             setHistory(prev => {
                 const updated = [...prev];
-                updated[updated.length - 1].output = result !== undefined ? result.toString() : null;
+                updated[updated.length - 1].output = b ? null : resultString;
                 return updated;
             });
         } catch (error) {
@@ -252,11 +289,12 @@ function PythonConsole({
 
     const toMultiline = (text: string) : string => {
         return text.split('\n').map((line, index) => (index===0 ? `${line}` : `... ${line}`)).join('\n');
-    }
+    };
+
     const prependTabToLastLine = (text: string) : string => {
         const multilines = text.split('\n');
         return multilines.map((line, index) => (index=== multilines.length-1 ? `  ${line}` : line)).join('\n');
-    }
+    };
 
     return (
         <div className="python-console">
@@ -271,8 +309,13 @@ function PythonConsole({
                         return (
                             <React.Fragment key={index}>
                                 <div>{`>>> ${toMultiline(item.input)}`}</div>
-                                {item.output !== null && <div>{item.output}</div>}
-                            </React.Fragment>)
+                                {item.output !== null && (
+                                    <div style={{ color: isPythonError(item.output) ? '#ff00ff' : 'inherit' }}>
+                                        {item.output}
+                                    </div>
+                                )}
+                            </React.Fragment>
+                        )
                     } else {
                         return null;
                     }

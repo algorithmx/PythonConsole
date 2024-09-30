@@ -3,9 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+    <script>
+        function resizeIframe(iframe) {
+            const iframeDocument = iframe.contentWindow.document;
+            const contentHeight = iframeDocument.documentElement.scrollHeight;
+            const bodyContent = iframeDocument.body.innerHTML.trim();
+            iframe.style.height = bodyContent ? contentHeight + 'px' : '0px';
+        }
+    </script>
     <title>Python Console</title>
 </head>
 <body>
     <div id="root"></div>
+    <div id="figure-area">
+        <iframe id="injected-plotly-html" onload="resizeIframe(this)"></iframe>
+    </div>
 </body>
 </html>
