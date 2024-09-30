@@ -81,7 +81,7 @@ function PythonConsole({
         await pyodide.loadPackage("micropip");
         await pyodide.runPythonAsync(`
             import micropip
-            await micropip.install(['numpy', 'pandas', 'matplotlib', 'plotly']);
+            await micropip.install(['numpy', 'scipy', 'scikit-learn', 'pydantic', 'pandas', 'matplotlib', 'plotly', 'seaborn']);
         `);
         onMessage("Packages loaded successfully");
     };
@@ -114,7 +114,9 @@ function PythonConsole({
                 await loadPyodidePackages();
                 const result = await pyodide.runPythonAsync("import sys; sys.version");
                 if (result !== undefined) {
-                    setHistory(prev => [...prev, { input: "Python version", output: result.toString() }]);
+                    const outs = result.toString();
+                    const todoList = "\n\nTODO:\n\tinclude openai\n\tsupport ipython\n\trender iframes in-place";
+                    setHistory(prev => [...prev, { input: "Python version", output: outs + todoList }]);
                 }
                 if (pyodide) {
                     setIsPyodideReady(true);
@@ -323,7 +325,7 @@ function PythonConsole({
                 <div ref={scrollRef} />
             </div>)}
             <div className="python-console-input">
-                <span style={{ padding: '0', margin: '0' }}>{'>>>'}&nbsp;</span>
+                <span style={{ padding: '0', margin: '0' }}>{isPyodideReady ? '>>>' : 'loading...'}&nbsp;</span>
                 <textarea
                     style={{ padding: '0', margin: '0' }}
                     // ref={inputRef}
