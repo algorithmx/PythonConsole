@@ -31,19 +31,39 @@ interface HistoryItem {
     output: string | null;
 }
 
-function changeElementText(id: string, text: string) {
-    const element = document.getElementById(id);
-    if (element) {
-        element.innerText = text;
-    }
-}
+//! examples of page element manipulators
+// function changeElementText(id: string, text: string) {
+//     const element = document.getElementById(id);
+//     if (element) {
+//         element.innerText = text;
+//     }
+// }
 
-function changeElementColor(id: string, color: any) {
-    const element = document.getElementById(id);
-    if (element) {
-        element.style.color = color;
-    }
-}
+// function changeElementColor(id: string, color: any) {
+//     const element = document.getElementById(id);
+//     if (element) {
+//         element.style.color = color;
+//     }
+// }
+// class ElementManipulator {
+//     private element: HTMLElement | null;
+
+//     constructor(elementId: string) {
+//         this.element = document.getElementById(elementId);
+//     }
+
+//     changeText(newText: string): void {
+//         if (this.element) {
+//             this.element.innerText = newText;
+//         }
+//     }
+
+//     changeColor(newColor: string): void {
+//         if (this.element) {
+//             this.element.style.color = newColor;
+//         }
+//     }
+// }
 
 function PythonConsole({
     onMessage
@@ -141,6 +161,13 @@ function PythonConsole({
                 //     changeElementText,
                 //     changeElementColor
                 // });
+                //! Register the class with Pyodide
+                // async function loadPyodideAndRegisterClass() {
+                //     await loadPyodide();
+                //     pyodide.registerJsModule('js', {
+                //         ElementManipulator: window.ElementManipulator
+                //     });
+                // }
                 if (pyodide) {
                     setIsPyodideReady(true);
                 }
