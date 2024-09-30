@@ -65,6 +65,12 @@ interface HistoryItem {
 //     }
 // }
 
+const packages = [
+    'numpy', 'scipy', 'networkx',
+    'sympy', 'ply', 'pyyaml',
+    'pandas', 'matplotlib', 'plotly'
+];
+
 function PythonConsole({
     onMessage
 } : PythonConsoleProps) : JSX.Element {
@@ -81,7 +87,7 @@ function PythonConsole({
         const savedHistory = Cookies.get('pythonConsoleHistory');
         if (savedHistory) {
             const filteredHistory = JSON.parse(savedHistory).filter((h: any) => h.input !== "Python version");
-            setHistory(filteredHistory);
+            setHistory(_ => filteredHistory);
         }
     }, []);
 
@@ -91,8 +97,12 @@ function PythonConsole({
     const [currentInput, setCurrentInput] = useState('');
     const [inputBuffer, setInputBuffer] = useState('');
     const [htmlInjection, setHtmlInjection] = useState<string|null>(null);
+    const [pyodideStdOut, setpyodideStdOut] = useState<string|null>(null);
+    const [pyodideStdErr, setpyodideStdErr] = useState<string|null>(null);
     const [rows, setRows] = useState(1);
     const [isPyodideReady, setIsPyodideReady] = useState<boolean>(false);
+    const [isExecuting, setIsExecuting] = useState<boolean>(false);
+    const [pendingOutput, setPendingOutput] = useState<string | null>(null);
     // const inputRef = useRef<HTMLInputElement>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -115,7 +125,7 @@ function PythonConsole({
         await pyodide.loadPackage("micropip");
         await pyodide.runPythonAsync(`
             import micropip
-            await micropip.install(['numpy', 'scipy', 'pydantic', 'pandas', 'matplotlib', 'plotly']);
+            await micropip.install([${packages.map(x=>`'${x}'`).join(', ')}]);
         `);
         await pyodide.runPythonAsync(`
             import js
@@ -136,6 +146,13 @@ function PythonConsole({
             }
         }
     }, [htmlInjection]);
+    
+    useEffect(() => {
+        if (!isExecuting && pendingOutput !== null) {
+            setHistory(prev => [...prev, { input: '', output: pendingOutput } as HistoryItem]);
+            setPendingOutput(null);
+        }
+    }, [isExecuting, pendingOutput]);
 
     useEffect(() => {
         const script = document.createElement('script');
@@ -143,7 +160,25 @@ function PythonConsole({
         script.async = true;
         script.onload = async () => {
             try {
-                let pyodide = await (window as any).loadPyodide();
+                setIsExecuting(true);
+                let pyodide = await (window as any).loadPyodide({
+                    stdout: (pyodideStdOut: string|null) => {
+                        if (pyodideStdOut !== null) {
+                            const strPyodideStdOut: string = "[Terminal]\n" + pyodideStdOut.toString();
+                            if (strPyodideStdOut !== 'None') {
+                                setPendingOutput(strPyodideStdOut);
+                            }
+                        }
+                    },
+                    stderr: (pyodideStdOut: string|null) => {
+                        if (pyodideStdOut !== null) {
+                            const strPyodideStdOut: string = "[Terminal]\n" + pyodideStdOut.toString();
+                            if (strPyodideStdOut !== 'None') {
+                                setPendingOutput(strPyodideStdOut);
+                            }
+                        }
+                    }
+                });
                 (window as any).pyodide = pyodide;
                 if (pyodide) {
                     onMessage("Pyodide loaded successfully");
@@ -153,7 +188,9 @@ function PythonConsole({
                 if (result !== undefined) {
                     const outs = result.toString();
                     const todoList = "\n\nTODO:\n\tinclude openai / llamaindex / langchain\n\tsupport ipython\n\trender iframes in-place";
-                    setHistory(prev => [...prev, { input: "Python version", output: outs + todoList }]);
+                    setHistory(
+                        prev => [...prev, { input: "Python version", output: outs + todoList }]
+                    );
                 }
                 //! here is an entrance to element manipulation within terminal
                 //! the host webpage can be manipulated by python code
@@ -171,9 +208,11 @@ function PythonConsole({
                 if (pyodide) {
                     setIsPyodideReady(true);
                 }
+                setIsExecuting(false);
             } catch (error) {
                 onMessage(`Error loading Pyodide or packages: ${error}`);
                 setIsPyodideReady(false);
+                setIsExecuting(false);
             }
         };
         document.head.appendChild(script);
@@ -189,8 +228,8 @@ function PythonConsole({
     }, [currentInput]);
 
     const handleInputChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-        // setInputBuffer(event.target.value);
-        setCurrentInput(event.target.value);
+        const inputText = event.target.value;
+        setCurrentInput(inputText);
     };
     const handleBlur = () => {
         setCurrentInput(inputBuffer);
@@ -203,7 +242,6 @@ function PythonConsole({
 
     const isMultiLine = (text: string): boolean => {
         const multilines = text.split('\n');
-        console.log(multilines);
         return multilines.length > 1 && multilines[multilines.length-1] !== '';
     }
 
@@ -216,8 +254,6 @@ function PythonConsole({
             const { pyodide } = window as any;
             const code = `import json; json.dumps(dir(${objectName}))`;
             const result = await pyodide.runPythonAsync(code);
-            console.log("Suggestions:");
-            console.log(result);
             return JSON.parse(result);
         } catch (error) {
             onMessage(`Error fetching suggestions: ${error}`);
@@ -293,46 +329,61 @@ function PythonConsole({
         return s!==null && s.startsWith('PythonError:')
     }
 
+    const isPythonWarning = (s: string|null): boolean => {
+        return s!==null && s.startsWith('PythonWarning:')
+    };
+
+    const isPyodideTerminal = (s: string|null): boolean => {
+        return s!==null && s.startsWith('[Terminal]')
+    };
+
+    const getOutputColor = (s: string|null): string => {
+        if (s === null) {
+            return 'inherit';
+        } else if (isPythonError(s)) {
+            return '#ff00ff';
+        } else if (isPythonWarning(s)) {
+            return '#FFA500';
+        } else if (isPyodideTerminal(s)) {
+            return '#22ffff'
+        } else {
+            return 'inherit';
+        }
+    };
+
     const executeCode = async (code: string) => {
         if (code.trim() === '') {
             return; // Handle empty inputs
         }
-        const newHistoryItem: HistoryItem = { input: code, output: null };
-        setHistory(prev => [...prev, newHistoryItem]);
-        setCurrentInput('');
         if (!isPyodideReady) {
             onMessage("Pyodide is still loading. Please wait...");
             return;
         }
-        try {
-            const { pyodide } = window as any;
-            const result = await pyodide.runPythonAsync(code);
-            let resultString: string|null = null;
-            let b = false;
-            if (result !== undefined) {
-                resultString = result.toString();
-                console.log("Python command result:");
-                console.log(result);
-                console.log("Python command result string:");
-                console.log(resultString);
-                b = isHtml(resultString);
-                if ( b ) {
-                    setHtmlInjection(resultString);
-                }
-            }
-            setHistory(prev => {
-                const updated = [...prev];
-                updated[updated.length - 1].output = b ? null : resultString;
-                return updated;
-            });
-        } catch (error) {
-            setHistory(prev => {
-                const updated = [...prev];
-                updated[updated.length - 1].output = `${error}`;
-                return updated;
-            });
-        }
-    
+        setIsExecuting(true);
+        const { pyodide } = window as any;
+            pyodide.runPythonAsync(code)
+                .then((result: any) => {
+                    let resultString: string|null = null;
+                    let b = false;
+                    if (result !== undefined && result !== null) {
+                        resultString = result.toString();
+                        b = isHtml(resultString);
+                        if ( b ) {
+                            setHtmlInjection(resultString);
+                        }
+                    }
+                    setHistory(
+                        prev => [...prev, {input: code, output: (b ? null : resultString)}]
+                    );
+                    setIsExecuting(false);
+                    setCurrentInput('');
+                })
+                .catch((error:any) => {
+                    setIsExecuting(false);
+                    setHistory(
+                        prev => [...prev, {input: code, output: `${error}`}]
+                    );
+                });
         // if (inputRef.current) {
         //     inputRef.current.focus();
         // }
@@ -359,9 +410,9 @@ function PythonConsole({
                     } else if (item.input !== 'Python version') {
                         return (
                             <React.Fragment key={index}>
-                                <div>{`>>> ${toMultiline(item.input)}`}</div>
+                                {item.input!=='' && (<div>{`>>> ${toMultiline(item.input)}`}</div>)}
                                 {item.output !== null && (
-                                    <div style={{ color: isPythonError(item.output) ? '#ff00ff' : 'inherit' }}>
+                                    <div style={{ color: getOutputColor(item.output) }}>
                                         {item.output}
                                     </div>
                                 )}
@@ -374,7 +425,7 @@ function PythonConsole({
                 <div ref={scrollRef} />
             </div>)}
             <div className="python-console-input">
-                <span style={{ padding: '0', margin: '0' }}>{isPyodideReady ? '>>>' : 'loading...'}&nbsp;</span>
+                <span style={{ padding: '0', margin: '0' }}>{isPyodideReady ? (isExecuting ? '~~~' : '>>>') : 'loading...'}&nbsp;</span>
                 <textarea
                     style={{ padding: '0', margin: '0' }}
                     // ref={inputRef}
