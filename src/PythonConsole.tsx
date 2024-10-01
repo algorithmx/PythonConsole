@@ -64,7 +64,7 @@ function PythonConsole({
     const [rows, setRows] = useState(1);
     const [isPyodideReady, setIsPyodideReady] = useState<boolean>(false);
     const [isExecuting, setIsExecuting] = useState<boolean>(false);
-    const [pendingOutput, setPendingOutput] = useState<string | null>(null);
+    const [outputBuffer, setOutputBuffer] = useState<string[]|null>(null);
     const scrollRef = useRef<HTMLDivElement>(null);
     const [suggestions, setSuggestions] = useState<string[]>([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -123,11 +123,12 @@ function PythonConsole({
     }, [htmlInjection]);
 
     useEffect(() => {
-        if (!isExecuting && pendingOutput !== null) {
+        if (!isExecuting && outputBuffer !== null) {
+            const pendingOutput = "[Terminal]\n" + outputBuffer.join('\n');
             setHistory(prev => [...prev, { input: '', output: pendingOutput } as HistoryItem]);
-            setPendingOutput(null);
+            setOutputBuffer(null);
         }
-    }, [isExecuting, pendingOutput]);
+    }, [isExecuting]);
 
     useEffect(() => {
         const script = document.createElement('script');
@@ -141,7 +142,7 @@ function PythonConsole({
                         if (pyodideStdOut !== null) {
                             const strPyodideStdOut: string = pyodideStdOut.toString().trim();
                             if (strPyodideStdOut !== 'None') {
-                                setPendingOutput("[Terminal]\n" + strPyodideStdOut);
+                                setOutputBuffer(prev => prev ? [...prev, strPyodideStdOut] : [strPyodideStdOut])
                             }
                         }
                     },
@@ -149,7 +150,7 @@ function PythonConsole({
                         if (pyodideStdOut !== null) {
                             const strPyodideStdOut: string = pyodideStdOut.toString().trim();
                             if (strPyodideStdOut !== 'None') {
-                                setPendingOutput("[Terminal]\n" + strPyodideStdOut);
+                                setOutputBuffer(prev => prev ? [...prev, strPyodideStdOut] : [strPyodideStdOut])
                             }
                         }
                     }
